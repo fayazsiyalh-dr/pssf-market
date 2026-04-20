@@ -22,4 +22,87 @@
 <body>
   <div id="root"></div>
 </body>
-</html>
+</html>import React, { useState, useRef, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
+import { Upload, Brain, Zap, Target, Loader2, Send, Image as ImageIcon, BarChart3 } from 'lucide-react';
+
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+const PHI = 1.61803398875;
+const MODEL = "gemini-2.5-flash";   // Current stable model (April 2026)
+
+const App = () => {
+  const [image, setImage] = useState(null);
+  const [base64, setBase64] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState(null);
+  const [marketInsights, setMarketInsights] = useState(null);
+  const [chatInput, setChatInput] = useState("");
+  const [chatHistory, setChatHistory] = useState([{ role: 'assistant', content: "PSSF Neural Interface ready. Upload a marketing stimulus to begin." }]);
+  const [isTyping, setIsTyping] = useState(false);
+  
+  const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const chatEndRef = useRef(null);
+
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatHistory]);
+
+  const cleanJson = (text) => {
+    return text.replace(/```json|```/g, '').trim();
+  };
+
+  const runAnalysis = async () => {
+    if (!base64 || !API_KEY) {
+      setChatHistory(prev => [...prev, { role: 'assistant', content: "❌ API key missing in Vercel settings." }]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const prompt = `Task: Detect focal points for marketing analysis. Output strictly valid JSON only: {"analysis":[{"label":"string","box_2d":[ymin,xmin,ymax,xmax],"rarity":0.1}]}`;
+
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/jpeg", data: base64 } }] }],
+          generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+
+      let rawText = data.candidates[0].content.parts[0].text;
+      rawText = cleanJson(rawText);
+      const raw = JSON.parse(rawText);
+
+      const processed = (raw.analysis || []).map(obj => ({
+        ...obj,
+        focusScore: (PHI * -Math.log2(obj.rarity || 0.5)) * 1.2
+      })).sort((a, b) => b.focusScore - a.focusScore);
+
+      setResults(processed);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: `✅ Analysis complete. Primary focal anchor: **${processed[0]?.label || "N/A"}**` }]);
+    } catch (err) {
+      console.error(err);
+      setChatHistory(prev => [...prev, { role: 'assistant', content: `⚠️ Analysis failed: ${err.message}` }]);
+    } finally { setLoading(false); }
+  };
+
+  // Market Audit function is the same as before (kept short for space)
+  const enhanceMarket = async () => { /* same as previous version */ };
+
+  // Canvas drawing, chat, JSX — exactly the same as last version I gave you
+
+  return (
+    <div className="min-h-screen bg-[#020306] text-slate-100 p-4 md:p-8 font-sans">
+      {/* Your full UI JSX from previous message remains unchanged */}
+      {/* Just make sure you paste the complete file I gave you earlier + the changes above */}
+    </div>
+  );
+};
+
+const container = document.getElementById('root');
+if (container) {
+  if (!container._root) container._root = createRoot(container);
+  container._root.render(<App />);
+}
